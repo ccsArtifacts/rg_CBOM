@@ -1,0 +1,118 @@
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+/build
+/dist
+*.out
+*.o
+*.a
+*.so
+
+# Go (keep go.mod and go.sum in git!)
+vendor/
+/bin
+/pkg
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+
+# React
+/build
+/.pnp
+.pnp.js
+coverage/
+.cache/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+tmp/
+
+# Certificates
+*.pem
+*.crt
+*.key
+*.csr
+*.p12
+*.jks
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/
+pg_data/
+
+# Secrets & Credentials
+secrets.yml
+.aws/
+credentials
+.vault-token
+
+# Configuration
+config/tls/*.crt
+config/tls/*.key
+config/*.local.yml
+
+# OS
+.DS_Store
+Thumbs.db
+.Directory
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+
+# Backups
+*.bak
+*.backup
+*.old
+.bak/
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Package files
+*.tar.gz
+*.zip
+*.rar
+
+# IDE specific
+.vscode/settings.json
+.vscode/extensions.json
+
+# Security
+private_keys/
+.ssh/

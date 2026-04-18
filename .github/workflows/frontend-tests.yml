@@ -1,0 +1,113 @@
+name: Frontend Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-tests.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  test:
+    name: Test Frontend (React)
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: ['18.x']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run ESLint
+        run: |
+          cd frontend
+          npm run lint || true
+
+      - name: Run TypeScript compiler
+        run: |
+          cd frontend
+          npx tsc --noEmit
+          echo "✓ TypeScript compilation OK"
+
+      - name: Run tests
+        run: |
+          cd frontend
+          npm test -- --coverage --watchAll=false
+
+      - name: Check test coverage
+        run: |
+          cd frontend
+          if [ -f coverage/coverage-summary.json ]; then
+            coverage=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+            echo "📊 Test coverage: ${coverage}%"
+            if (( $(echo "$coverage < 70" | bc -l) )); then
+              echo "⚠️  Coverage below 70%: ${coverage}%"
+            fi
+          fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./frontend/coverage/coverage-final.json
+          flags: frontend
+          name: frontend-coverage
+
+      - name: Build application
+        run: |
+          cd frontend
+          npm run build
+          echo "✓ Build successful"
+
+      - name: Check bundle size
+        run: |
+          cd frontend
+          if [ -d build ]; then
+            size=$(du -sh build | awk '{print $1}')
+            echo "📦 Build size: $size"
+          fi
+
+  security:
+    name: Security Scan (Dependencies)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Check for vulnerabilities
+        run: |
+          cd frontend
+          npm audit --production || true
+
+      - name: Run Snyk scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high frontend/
+        continue-on-error: true

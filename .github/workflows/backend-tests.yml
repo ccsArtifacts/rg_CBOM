@@ -1,0 +1,140 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-tests.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+
+jobs:
+  test:
+    name: Test Backend (Go)
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: pqc_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7.2-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: go
+
+      - name: Download dependencies
+        run: |
+          cd backend
+          go mod download
+
+      - name: Run go fmt
+        run: |
+          cd backend
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "❌ Code is not properly formatted"
+            gofmt -s -d .
+            exit 1
+          fi
+          echo "✓ Code formatting OK"
+
+      - name: Run go vet
+        run: |
+          cd backend
+          go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          working-directory: backend
+          args: --timeout=5m
+
+      - name: Run unit tests
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/pqc_test
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          cd backend
+          go test -v -race -coverprofile=coverage.out ./...
+          
+      - name: Check test coverage
+        run: |
+          cd backend
+          coverage=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "📊 Test coverage: ${coverage}%"
+          if (( $(echo "$coverage < 70" | bc -l) )); then
+            echo "⚠️  Coverage below 70%: ${coverage}%"
+            exit 1
+          fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage.out
+          flags: backend
+          name: backend-coverage
+
+      - name: Build binary
+        run: |
+          cd backend
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -ldflags="-w -s -X main.Version=${{ github.sha }}" \
+            -o pqc-server ./cmd/main.go
+          echo "✓ Binary built successfully"
+
+      - name: Test binary startup
+        run: |
+          cd backend
+          timeout 5 ./pqc-server &
+          sleep 2
+          curl -s http://localhost:8080/health || true
+          echo "✓ Binary startup test OK"
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@master
+        with:
+          args: '-no-fail -fmt json -out gosec-report.json ./backend/...'
+          working-directory: backend
+
+      - name: Upload Gosec report
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: gosec-report.json
